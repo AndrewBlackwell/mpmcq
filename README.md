@@ -1,2 +1,4 @@
 # mpmcq
-High-throughput thread-safe multi-producer/multi-consumer (MPMC) queue for logs/metrics.
+If you're reading this, I have yet to move my code to github. 
+
+check back in a few days :)
