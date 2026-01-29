@@ -2,9 +2,13 @@
 #include <cstdint>
 #include <new> //hardware_desrtuctive_intererference_size
 
-constexpr std::size_t CACHE_LINE_SIZE = 64;
+#ifdef __cpp_lib_hardware_interference_size
+using std::hardware_destructive_interference_size;
+#else
+constexpr std::size_t hardware_destructive_interference_size = 128;
+#endif
 
-struct alignas(CACHE_LINE_SIZE) TraceSpan
+struct alignas(hardware_destructive_interference_size) TraceSpan
 {
     uint64_t trace_id_high;
     uint64_t trace_id_low;
