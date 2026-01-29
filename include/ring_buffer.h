@@ -13,7 +13,7 @@ class RingBuffer
 {
 public:
     // in order to use fast bitwise masking, require capacity to be a power of two
-    explicit RingBuffer(size_t capacity) : capacity_(capacity), mask_(capacity - 1)
+    explicit RingBuffer(size_t capacity) : capacity_(capacity), mask_(capacity - 1), flags_(capacity)
     {
         // if (x & (x-1) == 0), x is a power of two.
         assert((capacity > 0) && ((capacity & (capacity - 1)) == 0));
@@ -23,7 +23,6 @@ public:
 
         // initialize the "turn" flags, slot x gets x.
         // this coordinates the first "lap" through the ring
-        flags_.resize(capacity_);
         for (size_t i = 0; i < capacity_; ++i)
         {
             flags_[i].store(i, std::memory_order_relaxed);
