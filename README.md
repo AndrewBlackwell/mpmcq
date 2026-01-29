@@ -23,8 +23,8 @@ Writing to a Queue has two distinct steps:
 1. Coordination: "Where is my input slot?"
 2. Execution: `memcpy`\`ing my bytes into that slot
 
-In our `std::mutex`-guarded queue example, the Mutex forces both steps to be serial, resulting in the following behavior: Thread $A$ locks; Thread $A$ coordinates; Thread $A$ copies its data; Thread $A$ unlocks; Thread $B$ locks;... So, if copying takes 100$ns$, and you have 2 threads, the total time for both to complete is ~200$ns$.
+#### Here's an example which should hopefully demonstrate where the optimization occurs:
+
+In our `std::mutex`-guarded queue , the Mutex forces both steps to be serial, resulting in the following behavior: Thread $A$ locks; Thread $A$ coordinates; Thread $A$ copies its data; Thread $A$ unlocks; Thread $B$ locks;... So, if copying takes 100$ns$, and you have 2 threads, the total time for both to complete is ~200$ns$.
 
 In this particular lock-free implementation--which aims to solve both problems outlined above--I only serialize step 1 of the process (Coordination), while step 2 (Execution) can happen in parallel. With this idea in mind (and before we get into implementation), consider this series of events: Thread $A$ coordinates; Thread $B$ coordinates 1 nanosecond later; Threads $A$ and $B$ both copies their data in parallel; This brings our total time down to... ~101$ns$!
-
-This is a matter of Logic Serialization versus Data serialization.
