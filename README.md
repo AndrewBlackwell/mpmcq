@@ -1,5 +1,7 @@
 # mpmcq
 
+## Introduction
+
 ### The Problem With `std::queue`
 
 `std::queue` is, by default, implemented with a `std::dequeue`. If you're interested in why, [here's](https://stackoverflow.com/questions/41102465/why-does-stdqueue-use-stddequeue-as-underlying-default-container) a nice thread with some useful insight into how the implementation was decided.
