@@ -34,6 +34,18 @@ public:
         tail_.data.store(0, std::memory_order_relaxed);
     }
 
+    // Producer tries to push a TraceSpan into the ring.
+    // returns true on success, false if the ring is full.
+    bool push(const TraceSpan &span)
+    {
+    }
+
+    // Consumer tries to pop a TraceSpan from the ring.
+    // returns true on success, false if the ring is empty.
+    bool pop(TraceSpan &result_span)
+    {
+    }
+
 private:
     std::vector<TraceSpan> buffer_;
     size_t capacity_;
