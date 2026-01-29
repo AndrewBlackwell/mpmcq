@@ -38,15 +38,95 @@ public:
     // returns true on success, false if the ring is full.
     bool push(const TraceSpan &span)
     {
+        // load the head postion
+        size_t head = head_.data.load(std::memory_order_relaxed);
+        for (;;)
+        {
+            // equivalent to head % capacity;
+            size_t slot_idx = head & mask_;
+
+            // reading the turn counter for this slot
+            size_t turn = flags_[slot_idx].load(std::memory_order_acquire);
+
+            // is it our turn to write here?
+            // if turn == head, then yes!
+            int64_t diff = (int64_t)turn - (int64_t)head;
+
+            if (diff == 0)
+            {
+                // let's attempt to reserve this slot by moving head forward
+                if (head_.data.compare_exchange_weak(head, head + 1, std::memory_order_relaxed))
+                {
+                    // success! we now own this slot. let's write our data.
+                    // this work is non-atomic, parallel!
+                    buffer_[slot_idx] = span;
+
+                    flags_[slot_idx].store(head + 1, std::memory_order_release);
+                    return true;
+                }
+                // if the CAS failed, head is updated to the new value.
+            }
+            else if (diff < 0)
+            {
+                // this means the buffer is full.
+                // For example, we want to write to #100, but the flag is at #90.
+                return false;
+            }
+            else
+            {
+                // edge-case: someone else beat us to this slot and incremented head.
+                // let's reload head and try again.
+                head = head_.data.load(std::memory_order_relaxed);
+            }
+        }
     }
 
     // Consumer tries to pop a TraceSpan from the ring.
     // returns true on success, false if the ring is empty.
     bool pop(TraceSpan &result_span)
     {
+        size_t tail = tail_.data.load(std::memory_order_relaxed);
+
+        for (;;)
+        {
+            size_t slot_idx = tail & mask_;
+            size_t turn = flags_[slot_idx].load(std::memory_order_acquire);
+
+            // if turn == (tail + 1), then the writer has
+            // finished writing here and we are ready to read!
+            int64_t diff = (int64_t)turn - (int64_t)(tail + 1);
+
+            if (diff == 0)
+            {
+                // let's attempt to reserve this read
+                if (tail_.data.compare_exchange_weak(tail, tail + 1, std::memory_order_relaxed))
+                {
+                    // success! copy data out:
+                    result_span = buffer_[slot_idx];
+
+                    // now we must publish the read, which opens
+                    // the slot for the next writer. The next writer
+                    // will be looking for this current tail + capacity,
+                    // since it will be the next "lap" around the ring
+                    flags_[slot_idx].store(tail + capacity_, std::memory_order_release);
+                    return true;
+                }
+            }
+            else if (diff < 0)
+            {
+                // empty, the writer hasn't finished here yet
+                return false;
+            }
+            else
+            {
+                // someone else beat us here
+                tail = tail_.data.load(std::memory_order_relaxed);
+            }
+        }
     }
 
 private:
+    // buffer is the raw storage
     std::vector<TraceSpan> buffer_;
     size_t capacity_;
     size_t mask_;
