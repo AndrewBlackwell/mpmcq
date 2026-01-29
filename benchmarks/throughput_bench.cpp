@@ -10,7 +10,7 @@
 #include "trace_span.h"
 
 // test constants
-const size_t QUEUE_CAPACITY = 1024;
+const size_t QUEUE_CAPACITY = 65536;
 const size_t TOTAL_OPS = 10'000'000;
 const int THREAD_COUNT = 4;
 
@@ -86,8 +86,7 @@ void benchRingBuffer()
                 // if empty, keep trying
                 while (!queue.pop(span))
                 {
-                    // optional, I'm being nice to my CPU here
-                    // std::this_thread::yield();
+                    std::this_thread::yield();
                 }
             } });
     }
@@ -103,7 +102,7 @@ void benchRingBuffer()
                 // if full, keep trying
                 while (!queue.push(span))
                 {
-                    // std::this_thread::yield();
+                    std::this_thread::yield();
                 }
             } });
     }
