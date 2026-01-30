@@ -2,50 +2,43 @@
 
 #include <queue>
 #include <mutex>
-#include <condition_variable>
-#include "trace_span.h"
+#include <vector>
 
+template <typename T>
 class MutexQueue
 {
 public:
     explicit MutexQueue(size_t capacity) : capacity_(capacity) {}
 
-    void enqueue(const TraceSpan &span)
+    bool enqueue(const T &data)
     {
         std::unique_lock<std::mutex> lock(mtx_);
 
-        not_full_.wait(lock, [this]()
-                       { return q_.size() < capacity_; });
+        if (q_.size() >= capacity_)
+        {
+            return false;
+        }
 
-        q_.push(span);
-
-        // unlock before notifying to avoid
-        // waking up to a locked mutex
-        lock.unlock();
-        not_empty_.notify_one();
+        q_.push(data);
+        return true;
     }
 
-    bool dequeue(TraceSpan &span)
+    bool dequeue(T &data)
     {
         std::unique_lock<std::mutex> lock(mtx_);
 
-        not_empty_.wait(lock, [this]()
-                        { return !q_.empty(); });
+        if (q_.empty())
+        {
+            return false;
+        }
 
-        span = q_.front();
+        data = q_.front();
         q_.pop();
-        lock.unlock();
-
-        // wake up a sleeping producer
-        not_full_.notify_one();
-
         return true;
     }
 
 private:
-    std::queue<TraceSpan> q_;
+    std::queue<T> q_;
     std::mutex mtx_;
-    std::condition_variable not_empty_;
-    std::condition_variable not_full_;
     size_t capacity_;
 };
