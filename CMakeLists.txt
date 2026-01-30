@@ -5,6 +5,15 @@ project(ringbuffer LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# On macOS, prefer clang over gcc
+if(APPLE)
+    set(CMAKE_CXX_COMPILER /usr/bin/clang++)
+    set(CMAKE_C_COMPILER /usr/bin/clang)
+endif()
+
+# Compiler flags for optimization and warnings
+add_compile_options(-O3 -Wall -Wextra)
+
 # Tells CMake that header files live in the "include/" folder.
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
