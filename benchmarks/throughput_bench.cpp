@@ -10,13 +10,13 @@
 #include "trace_span.h"
 
 // test constants
-const size_t QUEUE_CAPACITY = 65536;
+const size_t QUEUE_CAPACITY = 4096;
 const size_t TOTAL_OPS = 10'000'000;
 const int THREAD_COUNT = 4;
 
 void benchMutexQueue()
 {
-    MutexQueue queue;
+    MutexQueue queue(QUEUE_CAPACITY);
     std::vector<std::thread> producers;
     std::vector<std::thread> consumers;
 
@@ -32,10 +32,7 @@ void benchMutexQueue()
             TraceSpan span;
             for (size_t j = 0; j < ops_per_thread; ++j)
             {
-                while (!queue.pop(span))
-                {
-                    std::this_thread::yield();
-                }
+                queue.pop(span);
             } });
     }
 
@@ -62,7 +59,9 @@ void benchMutexQueue()
     std::chrono::duration<double> duration = end - start;
     double throughput = TOTAL_OPS / duration.count();
 
-    std::cout << "[MutexQueue] Time: " << std::setprecision(5) << duration.count() << " seconds | Throughput: " << (long)(throughput) << " ops/sec" << std::endl;
+    std::cout << "[MutexQueue] Time: " << std::setprecision(5)
+              << duration.count() << " seconds | Throughput: "
+              << (long)(throughput) << " ops/sec" << std::endl;
 }
 
 void benchRingBuffer()
@@ -83,7 +82,8 @@ void benchRingBuffer()
             TraceSpan span;
             for (size_t j = 0; j < ops_per_thread; ++j)
             {
-                // if empty, keep trying
+                // if empty, keep trying; the primitive is non-blocking, 
+                // so the responsibility to implement a wait strategy falls on us
                 while (!queue.pop(span))
                 {
                     std::this_thread::yield();
@@ -118,15 +118,21 @@ void benchRingBuffer()
     std::chrono::duration<double> duration = end - start;
     double throughput = TOTAL_OPS / duration.count();
 
-    std::cout << "[RingBuffer] Time: " << std::setprecision(5) << duration.count() << " seconds | Throughput: " << (long)(throughput) << " ops/sec" << std::endl;
+    std::cout << "[RingBuffer] Time: " << std::setprecision(5)
+              << duration.count() << " seconds | Throughput: "
+              << (long)(throughput) << " ops/sec" << std::endl;
 }
 
 int main()
 {
     std::cout << "Benchmarking with " << TOTAL_OPS << " items and " << THREAD_COUNT << " threads." << std::endl;
 
-    benchMutexQueue();
-    benchRingBuffer();
+    for (int i = 1; i <= 3; ++i)
+    {
+        std::cout << "---- Run " << i << " ----" << std::endl;
+        benchMutexQueue();
+        benchRingBuffer();
+    }
 
     return 0;
 }
