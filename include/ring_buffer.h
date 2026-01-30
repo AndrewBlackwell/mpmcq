@@ -33,9 +33,9 @@ public:
         tail_.data.store(0, std::memory_order_relaxed);
     }
 
-    // Producer tries to push a TraceSpan into the ring.
+    // Producer tries to enqueue a TraceSpan into the ring.
     // returns true on success, false if the ring is full.
-    bool push(const TraceSpan &span)
+    bool enqueue(const TraceSpan &span)
     {
         // load the head postion
         size_t head = head_.data.load(std::memory_order_relaxed);
@@ -80,9 +80,9 @@ public:
         }
     }
 
-    // Consumer tries to pop a TraceSpan from the ring.
+    // Consumer tries to dequeue a TraceSpan from the ring.
     // returns true on success, false if the ring is empty.
-    bool pop(TraceSpan &result_span)
+    bool dequeue(TraceSpan &result_span)
     {
         size_t tail = tail_.data.load(std::memory_order_relaxed);
 

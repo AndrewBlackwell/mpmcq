@@ -1,5 +1,5 @@
 # define the demo executable
-add_executable(sanity_check main.cpp)
+add_executable(correctness_test main.cpp)
 
 # it uses threads (even if single-threaded)
-target_link_libraries(sanity_check PRIVATE Threads::Threads)
+target_link_libraries(correctness_test PRIVATE Threads::Threads)

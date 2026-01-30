@@ -10,7 +10,7 @@ class MutexQueue
 public:
     explicit MutexQueue(size_t capacity) : capacity_(capacity) {}
 
-    void push(const TraceSpan &span)
+    void enqueue(const TraceSpan &span)
     {
         std::unique_lock<std::mutex> lock(mtx_);
 
@@ -25,7 +25,7 @@ public:
         not_empty_.notify_one();
     }
 
-    bool pop(TraceSpan &span)
+    bool dequeue(TraceSpan &span)
     {
         std::unique_lock<std::mutex> lock(mtx_);
 
