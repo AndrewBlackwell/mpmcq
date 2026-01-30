@@ -23,3 +23,4 @@ find_package(Threads REQUIRED)
 
 # Tells CMake to descend into source folders.
 add_subdirectory(src)
+add_subdirectory(benchmark)
