@@ -24,7 +24,7 @@
 
 int main()
 {
-    RingBuffer rb(4);
+    RingBuffer<TraceSpan> rb(4);
 
     // dummy span
     TraceSpan in_span = {};

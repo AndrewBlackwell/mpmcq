@@ -19,6 +19,4 @@ cd "$SCRIPT_DIR/build"
 env -i PATH="$PATH" HOME="$HOME" cmake .. && make
 
 echo ""
-echo "Build success! Run with:"
-echo "  $SCRIPT_DIR/build/benchmarks/telemetry_bench"
-echo "  $SCRIPT_DIR/build/src/sanity_check"
+echo "Build success!"
