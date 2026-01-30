@@ -6,9 +6,10 @@
 #include <cassert>
 #include "trace_span.h"
 
-/** A Lock-Free Multi-Producer Multi-Consumer (MPMC) Ring Buffer based on
+/** A Lock-Free Multi-Producer Multi-Consumer (MPMC) Ring Buffer loosely based on
  * Dmitry Vyukov's MPMC bounded queue algorithm.
  **/
+template <typename T>
 class RingBuffer
 {
 public:
@@ -35,7 +36,7 @@ public:
 
     // Producer tries to enqueue a TraceSpan into the ring.
     // returns true on success, false if the ring is full.
-    bool enqueue(const TraceSpan &span)
+    bool enqueue(const T &data)
     {
         // load the head postion
         size_t head = head_.data.load(std::memory_order_relaxed);
@@ -58,7 +59,7 @@ public:
                 {
                     // success! we now own this slot. let's write our data.
                     // this work is non-atomic, parallel!
-                    buffer_[slot_idx] = span;
+                    buffer_[slot_idx] = data;
 
                     flags_[slot_idx].store(head + 1, std::memory_order_release);
                     return true;
@@ -82,7 +83,7 @@ public:
 
     // Consumer tries to dequeue a TraceSpan from the ring.
     // returns true on success, false if the ring is empty.
-    bool dequeue(TraceSpan &result_span)
+    bool dequeue(T &data)
     {
         size_t tail = tail_.data.load(std::memory_order_relaxed);
 
@@ -101,7 +102,7 @@ public:
                 if (tail_.data.compare_exchange_weak(tail, tail + 1, std::memory_order_relaxed))
                 {
                     // success! copy data out:
-                    result_span = buffer_[slot_idx];
+                    data = buffer_[slot_idx];
 
                     // now we must publish the read, which opens
                     // the slot for the next writer. The next writer
@@ -126,7 +127,7 @@ public:
 
 private:
     // buffer is the raw storage
-    std::vector<TraceSpan> buffer_;
+    std::vector<T> buffer_;
     size_t capacity_;
     size_t mask_;
 
