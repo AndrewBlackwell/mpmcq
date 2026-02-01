@@ -21,6 +21,21 @@ struct BenchmarkConfig
     int duration_seconds;
 };
 
+template <size_t Bytes>
+struct HeavyPayload
+{
+    char data[Bytes];
+    // overload assignment to ensure memcpy happens
+    HeavyPayload &operator=(const HeavyPayload &other)
+    {
+        if (this != &other)
+        {
+            std::memcpy(data, other.data, Bytes);
+        }
+        return *this;
+    }
+};
+
 struct BenchmarkResult
 {
     long long total_ops;
@@ -103,15 +118,16 @@ void print_header()
               << std::string(90, '-') << std::endl;
 }
 
+template <typename PayloadT>
 void run_comparison(const std::string &name, int prod, int cons, size_t cap, int duration)
 {
     BenchmarkConfig config{name, prod, cons, cap, duration};
 
     // mutex-queue (baseline)
-    auto res_mutex = run_benchmark<MutexQueue<TraceSpan>, TraceSpan>(config);
+    auto res_mutex = run_benchmark<MutexQueue<PayloadT>, PayloadT>(config);
 
     // lock-free ring buffer implementation
-    auto res_ring = run_benchmark<RingBuffer<TraceSpan>, TraceSpan>(config);
+    auto res_ring = run_benchmark<RingBuffer<PayloadT>, PayloadT>(config);
 
     double speedup = res_ring.ops_per_sec / res_mutex.ops_per_sec;
     std::string thread_str = std::to_string(prod) + "P / " + std::to_string(cons) + "C";
@@ -126,33 +142,19 @@ void run_comparison(const std::string &name, int prod, int cons, size_t cap, int
 
 int main()
 {
-    std::cout << "==========================================================================================" << std::endl;
-    std::cout << "  Payload: 128 bytes (TraceSpan) | Default Capacity: 65536 | Duration: 4s per test" << std::endl;
-    std::cout << "==========================================================================================" << std::endl;
+    std::cout << "======================================================================" << std::endl;
+    std::cout << "  Threads: 2P 2C | Default Capacity: 65536 | Duration: 4s per test.   " << std::endl;
+    std::cout << "======================================================================" << std::endl;
 
     print_header();
 
-    // baseline latency test: low contention
-    // one producer thread, one consumer thread
-    run_comparison("baseline, 1p1c", 1, 1, 65536, 4);
-
-    // balanced load test: moderate contention
     // two producer threads, two consumer threads
-    run_comparison("balanced, 2p2c", 2, 2, 65536, 4);
-
-    // crowded contention test: high contention
-    // four producer threads, four consumer threads
-    run_comparison("crowded, 4p4c", 4, 4, 65536, 4);
-
-    // oversubscription test: saturated contention
-    // eight producer threads, eight consumer threads
-    // forces os context switches on most systems
-    run_comparison("oversubscribed, 8p8c", 8, 8, 65536, 4);
-
-    // small capacity, moderate contention
-    std::cout << std::string(90, '-') << std::endl;
-    std::cout << "stress test: small capacity (1024)" << std::endl;
-    run_comparison("small capacity, 2p2c", 2, 2, 1024, 4);
+    run_comparison<TraceSpan>("small payload", 2, 2, 65536, 4);
+    run_comparison<HeavyPayload<1024>>("1kb payload", 2, 2, 65536, 4);
+    run_comparison<HeavyPayload<4096>>("4kb payload", 2, 2, 65536, 4);
+    run_comparison<HeavyPayload<8192>>("8kb payload", 2, 2, 65536, 4);
+    run_comparison<HeavyPayload<16384>>("16kb payload", 2, 2, 65536, 4);
+    // run_comparison<HeavyPayload<65536>>("64kb payload", 2, 2, 65536, 4);
 
     std::cout << std::endl
               << "Done" << std::endl;

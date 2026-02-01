@@ -1,3 +1,12 @@
+/**
+ * A Lock-Free Multi-Producer Multi-Consumer (MPMC) Ring Buffer loosely based on
+ * Dmitry Vyukov's MPMC bounded queue algorithm.
+ *
+ * This is a thread-safe ring buffer that allows multiple producers
+ * to enqueue elements and multiple consumers to dequeue elements concurrently
+ * without using locks. The buffer uses atomic operations and a turn-based
+ * coordination mechanism to synchronize access.
+ */
 #pragma once
 
 #include <vector>
@@ -6,27 +15,25 @@
 #include <cassert>
 #include "trace_span.h"
 
-/** A Lock-Free Multi-Producer Multi-Consumer (MPMC) Ring Buffer loosely based on
- * Dmitry Vyukov's MPMC bounded queue algorithm.
- **/
 template <typename T>
 class RingBuffer
 {
 public:
     // in order to use fast bitwise masking, require capacity to be a power of two
-    explicit RingBuffer(size_t capacity) : capacity_(capacity), mask_(capacity - 1), flags_(capacity)
+    // initializing buffer_ in the member list allows is to hold non-movable atomic types
+    explicit RingBuffer(size_t capacity)
+        : capacity_(capacity),
+          mask_(capacity - 1),
+          buffer_(capacity)
     {
         // if (x & (x-1) == 0), x is a power of two.
         assert((capacity > 0) && ((capacity & (capacity - 1)) == 0));
-
-        // pre-allocate the data buffer
-        buffer_.resize(capacity_);
 
         // initialize the "turn" flags, slot x gets x.
         // this coordinates the first "lap" through the ring
         for (size_t i = 0; i < capacity_; ++i)
         {
-            flags_[i].store(i, std::memory_order_relaxed);
+            buffer_[i].flags_.store(i, std::memory_order_relaxed);
         }
 
         // initialize the head and tail
@@ -45,9 +52,10 @@ public:
             // equivalent to head % capacity;
             size_t slot_idx = head & mask_;
 
-            // reading the turn counter for this slot
-            size_t turn = flags_[slot_idx].load(std::memory_order_acquire);
+            Node &node = buffer_[slot_idx];
 
+            // reading the turn counter for this slot
+            size_t turn = node.flags_.load(std::memory_order_acquire);
             // is it our turn to write here?
             // if turn == head, then yes!
             int64_t diff = (int64_t)turn - (int64_t)head;
@@ -59,9 +67,9 @@ public:
                 {
                     // success! we now own this slot. let's write our data.
                     // this work is non-atomic, parallel!
-                    buffer_[slot_idx] = data;
+                    node.data_ = data;
 
-                    flags_[slot_idx].store(head + 1, std::memory_order_release);
+                    node.flags_.store(head + 1, std::memory_order_release);
                     return true;
                 }
                 // if the CAS failed, head is updated to the new value.
@@ -90,8 +98,10 @@ public:
         for (;;)
         {
             size_t slot_idx = tail & mask_;
-            size_t turn = flags_[slot_idx].load(std::memory_order_acquire);
 
+            Node &node = buffer_[slot_idx];
+
+            size_t turn = node.flags_.load(std::memory_order_acquire);
             // if turn == (tail + 1), then the writer has
             // finished writing here and we are ready to read!
             int64_t diff = (int64_t)turn - (int64_t)(tail + 1);
@@ -102,13 +112,13 @@ public:
                 if (tail_.data.compare_exchange_weak(tail, tail + 1, std::memory_order_relaxed))
                 {
                     // success! copy data out:
-                    data = buffer_[slot_idx];
+                    data = node.data_;
 
                     // now we must publish the read, which opens
                     // the slot for the next writer. The next writer
                     // will be looking for this current tail + capacity,
                     // since it will be the next "lap" around the ring
-                    flags_[slot_idx].store(tail + capacity_, std::memory_order_release);
+                    node.flags_.store(tail + capacity_, std::memory_order_release);
                     return true;
                 }
             }
@@ -126,28 +136,22 @@ public:
     }
 
 private:
-    // buffer is the raw storage
-    std::vector<T> buffer_;
+    // bounding flags + data prevents false sharing
+    struct Node
+    {
+        std::atomic<size_t> flags_;
+        T data_;
+    };
+
     size_t capacity_;
     size_t mask_;
+    std::vector<Node> buffer_;
 
-    /**
-     * The Sequence / Turn Array
-     * std::atomic is not copyable, so we can't just resize() a vector of them
-     * easily without a custom allocator, but for simplicity here std::vector
-     * is okay if initialized in constructor size.
-     **/
-    std::vector<std::atomic<size_t>> flags_;
-
-    /**
-     * To prevent false sharing, we put head and tail on their own cache lines.
-     * Since I'm on Apple Silicon, I'm using 128 bytes.
-     **/
     struct alignas(128) AlignedAtomic
     {
         std::atomic<size_t> data;
     };
 
-    AlignedAtomic head_; // producers write here
-    AlignedAtomic tail_; // consumers write here
+    AlignedAtomic head_;
+    AlignedAtomic tail_;
 };
